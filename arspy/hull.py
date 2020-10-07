@@ -77,7 +77,7 @@ class Hull(object):
       integrated_upper = self.hull_list[i].evaluate_integrated(self.hull_list[i].right)
       # if(i > 0):
       #   constant -= integrated_lower
-      self.hull_list[i].constant = constant
+      self.hull_list[i].constant = constant - integrated_lower
       # now set the range for the integrated rate and the
       # domain for the inverse of the integrated rate, which will
       # be the same
