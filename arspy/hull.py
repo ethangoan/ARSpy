@@ -3,6 +3,9 @@ from arspy.probability_utils import exp_normalize
 import numpy as np
 
 import matplotlib.pyplot as plt
+import random
+import string
+
 __all__ = (
   "HullNode",
   "compute_hulls",
@@ -10,6 +13,54 @@ __all__ = (
   "sample_upper_hull",
   "compute_segment_log_prob",
 )
+
+def sample_poisson_thinning(hull_samples, time):
+  print('hull_samples = {}'.format(hull_samples))
+  print('time = {}'.format(np.sort(time)))
+  S = np.sort(np.array(time).ravel())
+  fS = np.array(hull_samples).ravel()
+  upper_hulls, _ = compute_hulls(S, fS, domain=[0.0, 10.0])
+  hull = Hull(upper_hulls)
+  sample_time = hull.sample_poisson()
+  # find the value of the hull at this location
+  sample_hull = hull.eval_hull(sample_time)
+  def random_string_generator(str_size, allowed_chars=string.ascii_letters):
+    return ''.join(random.choice(allowed_chars) for x in range(str_size))
+  plot_str = random_string_generator(12)
+  plt.figure()
+  #plt.plot(S_hi, fS_hi, c='b', alpha=0.5, linewidth=3, label='target')
+  #plt.scatter(S, fS, alpha=0.25, c='b', label='samples', s=150)
+  for node in hull.hull_list[:-1]:
+    plt.plot([node.left, node.right],
+             [node.left * node.m + node.b, node.right * node.m + node.b],
+             alpha=1.0, c='r', linestyle='--')
+    plt.scatter(np.array([node.left, node.right]),
+                np.array([node.left * node.m + node.b, node.right * node.m + node.b]),
+                alpha=0.5, c='r')
+  plt.plot([hull.hull_list[-1].left, hull.hull_list[-1].right],
+           [hull.hull_list[-1].left * hull.hull_list[-1].m + hull.hull_list[-1].b,
+            hull.hull_list[-1].right * hull.hull_list[-1].m + hull.hull_list[-1].b],
+           c='r', alpha=1.0, linestyle='--', label='envelope')
+  # plt.scatter(np.array([hull.hull_list[-1].right]),
+  #             np.array([hull.hull_list[-1].right * hull.hull_list[-1].m + hull.hull_list[-1].b]),
+  #             c='r', alpha=0.5)
+  plt.legend(loc=0)
+  plt.savefig('adaptive_test/{}_hull.png'.format(plot_str))
+  plt.clf()
+  try:
+    time, integrated = hull.eval_integrated()
+    inv_time, inv_integrated = hull.eval_inverse_integrated(time=integrated)
+    plt.subplot(211)
+    plt.plot(inv_time, inv_integrated, label='inverse')
+    plt.subplot(212)
+    plt.plot(time, integrated, label='integrated')
+    plt.savefig('adaptive_test/{}.png'.format(plot_str))
+    plt.close()
+  except:
+    pass
+  print('this is sample {}'.format(plot_str))
+  return sample_time, sample_hull
+
 
 
 class Hull(object):
@@ -36,10 +87,10 @@ class Hull(object):
       self.hull_list[i].inverse_integrated_domain_upper = integrated_upper + constant
       # now add increment the constant term, which is the difference
       # established by the integral of this hull
-      print('hull {}, int_range = ({}, {}], int_domain = ({}, {}]'.format(i, self.hull_list[i].integrated_range_lower,
-                                                                          self.hull_list[i].integrated_range_upper,
-                                                                          self.hull_list[i].integrated_domain_lower,
-                                                                          self.hull_list[i].integrated_domain_upper))
+      # print('hull {}, int_range = ({}, {}], int_domain = ({}, {}]'.format(i, self.hull_list[i].integrated_range_lower,
+      #                                                                     self.hull_list[i].integrated_range_upper,
+      #                                                                     self.hull_list[i].integrated_domain_lower,
+      #                                                                     self.hull_list[i].integrated_domain_upper))
       constant += integrated_upper - integrated_lower
 
   def sample_poisson(self):
@@ -61,18 +112,35 @@ class Hull(object):
     E_sample = np.random.exponential(1.0)
     # now need to find which segment E is within the range of
     # for the inverse function
-    more_than_lower = [E_sample > x.inverse_range_lower for x in self.hull_list]
+    less_than_upper = [E_sample <= x.inverse_integrated_range_lower for x in self.hull_list]
     # now find the first hull segment where our exponential variable is
     # greater than the lower bound of the range, as this will be the one
     # where we need to sample from inverse
-    hull_segment_idx = np.where(more_than_lower)[0][0]
+    try:
+      hull_segment_idx = np.where(less_than_upper)[0][-1]
+      # now evaluate the inverse
+      # first need to find the additive constant for our integrated rate,
+      # which comes from the evaluation of all the complete segments prior to
+      # the one where our value of E_sample lies
+      #constant = np.sum([x.inverse_int_domain_upper - x.inverse_int_domain_lower for x in self.hull_list[0:hull_segment_idx]])
+      poisson_sample = self.hull_list[hull_segment_idx].evaluate_inverse(E_sample)#, constant)
+      return poisson_sample
+    except IndexError:
+      return 0.0
+
+  def eval_hull(self, time):
+    # find the hull segment we should sample from
+    less_than_upper = [time <= x.left for x in self.hull_list]
+    # now find the first hull segment where our exponential variable is
+    # greater than the lower bound of the range, as this will be the one
+    # where we need to sample from inverse
+    try:
+      hull_segment_idx = np.where(less_than_upper)[0][-1]
+    except IndexError:
+      hull_segment_idx = 0
     # now evaluate the inverse
-    # first need to find the additive constant for our integrated rate,
-    # which comes from the evaluation of all the complete segments prior to
-    # the one where our value of E_sample lies
-    #constant = np.sum([x.inverse_int_domain_upper - x.inverse_int_domain_lower for x in self.hull_list[0:hull_segment_idx]])
-    poisson_sample = self.hull_list[hull_segment_idx].evaluate_inverse(E_sample)#, constant)
-    return poisson_sample
+    return self.hull_list[hull_segment_idx].evaluate_hull(time)
+
 
   def eval_inverse_integrated(self, time=None, sample=100):
     if(time is None):
@@ -84,7 +152,7 @@ class Hull(object):
       less_than_upper = [t <= x.inverse_integrated_domain_upper for x in self.hull_list]
       #print(less_than_upper)
       #print(np.where(less_than_upper)[0])
-      hull_segment_idx = np.where(less_than_upper)[0][-1]
+      hull_segment_idx = np.where(less_than_upper)[0][0]
       #constant = np.sum([x.inverse_integrated_range_upper - x.inverse_integrated_range_lower for x in self.hull_list[0:hull_segment_idx]])
       inverse.append(self.hull_list[hull_segment_idx].evaluate_inverse(t))#, constant))
     return time, np.array(inverse)
@@ -99,7 +167,7 @@ class Hull(object):
       less_than_upper = [t <= x.integrated_domain_upper for x in self.hull_list]
       #print(less_than_upper)
       #print(np.where(less_than_upper)[0])
-      hull_segment_idx = np.where(less_than_upper)[0][-1]
+      hull_segment_idx = np.where(less_than_upper)[0][0]
       #constant = np.sum([x.inverse_integrated_domain_upper - x.inverse_integrated_domain_lower for x in self.hull_list[0:hull_segment_idx]])
       integrated.append(self.hull_list[hull_segment_idx].evaluate_integrated(t))#, constant))
     return time, np.array(integrated)
@@ -116,7 +184,7 @@ class HullNode(object):
     # adding range for the method as it will help us out later
     self.range_lower = self.m * self.left + self.b
     self.range_upper = self.m * self.right + self.b
-    self.integrated_domain_lower = self.left
+    self.integrated_domain_lower = 0.0 #self.left
     self.integrated_domain_upper = self.right
     # need to evaluate with any previous nodes to find the range
     self.integrated_range_lower = 0.0
@@ -126,19 +194,29 @@ class HullNode(object):
     # integrated rate
     self.inverse_integrated_domain_lower = 0.0
     self.inverse_integrated_domain_upper = 0.0
-    self.inverse_integrated_range_lower = self.left
+    self.inverse_integrated_range_lower = 0.0 #self.left
     self.inverse_integrated_range_upper = self.right
     # add a constant term, which will be found when evaluating the integral
     # of all the hull sections
     self.constant = 0.0
+    self.epsilon = 0.0000001
 
   def evaluate_inverse(self, sample):#, constant):
     """ will evaluate the inverse rate of this segment at `sample`"""
-    return (-self.b + np.sqrt(np.square(self.b) - 2.0 * self.m * (self.constant - sample))) / self.m
+    if(np.abs(self.m) > self.epsilon):
+       return (-self.b + np.sqrt(np.square(self.b) - 2.0 * self.m * (self.constant - sample))) / self.m
+    else:
+       return sample / self.b
 
   def evaluate_integrated(self, sample):#, constant=0.0):
     """ will evaluate the inverse rate of this segment at `sample`"""
-    return self.m * sample ** 2.0 / 2.0 + self.b * sample + self.constant
+    if(np.abs(self.m) > self.epsilon):
+       return self.m * sample ** 2.0 / 2.0 + self.b * sample + self.constant
+    else:
+       return self.b * sample
+
+  def evaluate_hull(self, sample):
+    return self.m * sample + self.b
 
   def __eq__(self, other):
     from math import isclose
@@ -157,7 +235,7 @@ class HullNode(object):
     ))
 
   def __repr__(self):
-    return "HullNode({m}, {b}, {left}, {right}, {pr})".format(
+    return "HullNode(m={m}, b={b}, left={left}, right={right}, pr={pr})".format(
       m=self.m, b=self.b, left=self.left, right=self.right, pr=self.pr
     )
 
@@ -273,9 +351,9 @@ def compute_hulls(S, fS, domain):
       ix = S[li + 1]
       pr1 = compute_segment_log_prob(S[li], ix, m1, b1)
       pr2 = float("-inf")
-    else:
-      if isinf(ix):
-        raise ValueError("Non finite intersection")
+    # else:
+    #   if isinf(ix):
+    #     raise ValueError("Non finite intersection")
 
       if abs(ix - S[li]) < 10.0 ** 12 * eps(S[li]):
         ix = S[li]
@@ -283,7 +361,7 @@ def compute_hulls(S, fS, domain):
         ix = S[li + 1]
       ######################################
       # this is where I am changing the code
-      if ix < S[li] or ix > S[li + 1]:
+      if (ix < S[li]) or (ix > S[li + 1]) or isinf(ix):
         # only add on segment that goes from
         # (S[li], fS[li]) to (S[li + 1], fS[li + 1])
         m = (fS[li + 1] - fS[li]) / (S[li + 1] - S[li])
