@@ -24,41 +24,41 @@ def sample_poisson_thinning(hull_samples, time):
   sample_time = hull.sample_poisson()
   # find the value of the hull at this location
   sample_hull = hull.eval_hull(sample_time)
-  def random_string_generator(str_size, allowed_chars=string.ascii_letters):
-    return ''.join(random.choice(allowed_chars) for x in range(str_size))
-  plot_str = random_string_generator(12)
-  plt.figure()
-  #plt.plot(S_hi, fS_hi, c='b', alpha=0.5, linewidth=3, label='target')
-  #plt.scatter(S, fS, alpha=0.25, c='b', label='samples', s=150)
-  for node in hull.hull_list[:-1]:
-    plt.plot([node.left, node.right],
-             [node.left * node.m + node.b, node.right * node.m + node.b],
-             alpha=1.0, c='r', linestyle='--')
-    plt.scatter(np.array([node.left, node.right]),
-                np.array([node.left * node.m + node.b, node.right * node.m + node.b]),
-                alpha=0.5, c='r')
-  plt.plot([hull.hull_list[-1].left, hull.hull_list[-1].right],
-           [hull.hull_list[-1].left * hull.hull_list[-1].m + hull.hull_list[-1].b,
-            hull.hull_list[-1].right * hull.hull_list[-1].m + hull.hull_list[-1].b],
-           c='r', alpha=1.0, linestyle='--', label='envelope')
-  # plt.scatter(np.array([hull.hull_list[-1].right]),
-  #             np.array([hull.hull_list[-1].right * hull.hull_list[-1].m + hull.hull_list[-1].b]),
-  #             c='r', alpha=0.5)
-  plt.legend(loc=0)
-  plt.savefig('adaptive_test/{}_hull.png'.format(plot_str))
-  plt.clf()
-  try:
-    time, integrated = hull.eval_integrated()
-    inv_time, inv_integrated = hull.eval_inverse_integrated(time=integrated)
-    plt.subplot(211)
-    plt.plot(inv_time, inv_integrated, label='inverse')
-    plt.subplot(212)
-    plt.plot(time, integrated, label='integrated')
-    plt.savefig('adaptive_test/{}.png'.format(plot_str))
-    plt.close()
-  except:
-    pass
-  print('this is sample {}'.format(plot_str))
+  # def random_string_generator(str_size, allowed_chars=string.ascii_letters):
+  #   return ''.join(random.choice(allowed_chars) for x in range(str_size))
+  # plot_str = random_string_generator(12)
+  # plt.figure()
+  # #plt.plot(S_hi, fS_hi, c='b', alpha=0.5, linewidth=3, label='target')
+  # #plt.scatter(S, fS, alpha=0.25, c='b', label='samples', s=150)
+  # for node in hull.hull_list[:-1]:
+  #   plt.plot([node.left, node.right],
+  #            [node.left * node.m + node.b, node.right * node.m + node.b],
+  #            alpha=1.0, c='r', linestyle='--')
+  #   plt.scatter(np.array([node.left, node.right]),
+  #               np.array([node.left * node.m + node.b, node.right * node.m + node.b]),
+  #               alpha=0.5, c='r')
+  # plt.plot([hull.hull_list[-1].left, hull.hull_list[-1].right],
+  #          [hull.hull_list[-1].left * hull.hull_list[-1].m + hull.hull_list[-1].b,
+  #           hull.hull_list[-1].right * hull.hull_list[-1].m + hull.hull_list[-1].b],
+  #          c='r', alpha=1.0, linestyle='--', label='envelope')
+  # # plt.scatter(np.array([hull.hull_list[-1].right]),
+  # #             np.array([hull.hull_list[-1].right * hull.hull_list[-1].m + hull.hull_list[-1].b]),
+  # #             c='r', alpha=0.5)
+  # plt.legend(loc=0)
+  # plt.savefig('adaptive_test/{}_hull.png'.format(plot_str))
+  # plt.clf()
+  # try:
+  #   time, integrated = hull.eval_integrated()
+  #   inv_time, inv_integrated = hull.eval_inverse_integrated(time=integrated)
+  #   plt.subplot(211)
+  #   plt.plot(inv_time, inv_integrated, label='inverse')
+  #   plt.subplot(212)
+  #   plt.plot(time, integrated, label='integrated')
+  #   plt.savefig('adaptive_test/{}.png'.format(plot_str))
+  #   plt.close()
+  # except:
+  #   pass
+  # print('this is sample {}'.format(plot_str))
   return sample_time, sample_hull
 
 
@@ -70,6 +70,9 @@ class Hull(object):
   """
   def __init__(self, hull_list):
     self.hull_list = hull_list
+    # print('\nHull items')
+    # for i in range(0, len(hull_list)):
+    #   print(self.hull_list[i])
     # now want to update the domain and ranges of the intgrated hulls
     constant = 0.0
     for i in range(0, len(self.hull_list)):
@@ -112,12 +115,12 @@ class Hull(object):
     E_sample = np.random.exponential(1.0)
     # now need to find which segment E is within the range of
     # for the inverse function
-    less_than_upper = [E_sample <= x.inverse_integrated_range_lower for x in self.hull_list]
+    less_than_upper = [E_sample <= x.inverse_integrated_domain_upper for x in self.hull_list]
     # now find the first hull segment where our exponential variable is
     # greater than the lower bound of the range, as this will be the one
     # where we need to sample from inverse
     try:
-      hull_segment_idx = np.where(less_than_upper)[0][-1]
+      hull_segment_idx = np.where(less_than_upper)[0][0]
       # now evaluate the inverse
       # first need to find the additive constant for our integrated rate,
       # which comes from the evaluation of all the complete segments prior to
@@ -315,10 +318,10 @@ def compute_hulls(S, fS, domain):
   # interior lines
   # there are two lines between each abscissa
   for li in range(1, len(S) - 2):
-    print(upper_hull[-1])
-    print(upper_hull[-1].left)
-    print(upper_hull[-1].right)
-    print(S[li - 1])
+    # print(upper_hull[-1])
+    # print(upper_hull[-1].left)
+    # print(upper_hull[-1].right)
+    # print(S[li - 1])
     # if((upper_hull[-1].left == S[li - 1]) & (upper_hull[-1].right == S[li])):
     #   continue
     m1 = (fS[li] - fS[li - 1]) / (S[li] - S[li - 1])
@@ -327,8 +330,8 @@ def compute_hulls(S, fS, domain):
     m2 = (fS[li + 2] - fS[li + 1]) / (S[li + 2] - S[li + 1])
     b2 = fS[li + 1] - m2 * S[li + 1]
 
-    if isinf(m1) and isinf(m2):
-      raise ValueError("both hull slopes are infinite")
+    # if isinf(m1) and isinf(m2):
+    #   raise ValueError("both hull slopes are infinite")
 
     dx1 = S[li] - S[li - 1]
     df1 = fS[li] - fS[li - 1]
