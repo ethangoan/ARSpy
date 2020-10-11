@@ -361,7 +361,7 @@ def compute_hulls(S, fS, domain):
         ix = S[li + 1]
       ######################################
       # this is where I am changing the code
-      if (ix < S[li]) or (ix > S[li + 1]) or isinf(ix):
+      if (ix < S[li]) or (ix > S[li + 1]) or isinf(ix) or (isinf(m1) and isinf(m2)):
         # only add on segment that goes from
         # (S[li], fS[li]) to (S[li + 1], fS[li + 1])
         m = (fS[li + 1] - fS[li]) / (S[li + 1] - S[li])
