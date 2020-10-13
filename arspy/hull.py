@@ -74,20 +74,23 @@ class Hull(object):
     # for i in range(0, len(hull_list)):
     #   print(self.hull_list[i])
     # now want to update the domain and ranges of the intgrated hulls
-    constant = 0.0
+    constant = self.hull_list[0].evaluate_integrated(self.hull_list[0].left)
     for i in range(0, len(self.hull_list)):
       integrated_lower = self.hull_list[i].evaluate_integrated(self.hull_list[i].left)
       integrated_upper = self.hull_list[i].evaluate_integrated(self.hull_list[i].right)
       # if(i > 0):
       #   constant -= integrated_lower
+      # print('constant = {}'.format(constant))
+      # print('lower = {}'.format(integrated_lower))
+      # print('constant - lower = {}'.format(constant - integrated_lower))
       self.hull_list[i].constant = constant - integrated_lower
       # now set the range for the integrated rate and the
       # domain for the inverse of the integrated rate, which will
       # be the same
-      self.hull_list[i].integrated_range_lower = constant
-      self.hull_list[i].integrated_range_upper = integrated_upper + constant
+      self.hull_list[i].integrated_range_lower = self.hull_list[i].constant
+      self.hull_list[i].integrated_range_upper = integrated_upper + self.hull_list[i].constant
       self.hull_list[i].inverse_integrated_domain_lower =  constant
-      self.hull_list[i].inverse_integrated_domain_upper = integrated_upper + constant
+      self.hull_list[i].inverse_integrated_domain_upper = integrated_upper + self.hull_list[i].constant
       # now add increment the constant term, which is the difference
       # established by the integral of this hull
       # print('hull {}, int_range = ({}, {}], int_domain = ({}, {}]'.format(i, self.hull_list[i].integrated_range_lower,
@@ -149,9 +152,14 @@ class Hull(object):
     if(time is None):
       time = np.linspace(self.hull_list[0].inverse_integrated_domain_lower,
                          self.hull_list[-1].inverse_integrated_domain_upper, 100)
+    # for hull in self.hull_list:
+    #   print(hull)
+    #   # print('inverse domain = ( {}, {} )'.format(hull.inverse_integrated_domain_lower,
+    #   #                                            hull.inverse_integrated_domain_upper))
+    #   # print('constant = {}'.format(hull.constant))
     inverse = []
     for t in time:
-      #print('t = {}'.format(t))
+      print('t = {}, num_samples = {}'.format(t, len(inverse)))
       less_than_upper = [t <= x.inverse_integrated_domain_upper for x in self.hull_list]
       #print(less_than_upper)
       #print(np.where(less_than_upper)[0])
@@ -159,6 +167,7 @@ class Hull(object):
       #constant = np.sum([x.inverse_integrated_range_upper - x.inverse_integrated_range_lower for x in self.hull_list[0:hull_segment_idx]])
       inverse.append(self.hull_list[hull_segment_idx].evaluate_inverse(t))#, constant))
     return time, np.array(inverse)
+
 
   def eval_integrated(self, time=None, sample=100):
     if(time is None):
@@ -362,6 +371,7 @@ def compute_hulls(S, fS, domain):
         ix = S[li]
       elif abs(ix - S[li + 1]) < 10.0**12 * eps(S[li + 1]):
         ix = S[li + 1]
+    else:
       ######################################
       # this is where I am changing the code
       if (ix < S[li]) or (ix > S[li + 1]) or isinf(ix) or (isinf(m1) and isinf(m2)):
