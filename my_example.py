@@ -1,9 +1,13 @@
 import numpy as np
+import matplotlib
+matplotlib.rcParams['text.usetex'] = True
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
 from arspy.hull import compute_hulls, Hull
 import random
+
+from tbnn.pdmp.poisson_process import SBPSampler
 
 import matplotlib
 
@@ -27,8 +31,17 @@ if __name__ == '__main__':
 
   #S = np.array([0.01, 0.05, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 0.9, 1.0])
   #fS = f(S)
-  S_hi = np.load('conv_time_array_2.npy')
-  fS_hi = 1.0 * np.load('conv_test_array_2.npy')
+  #S_hi = np.linspace(-4, 4, 1000)
+  #fS_hi = s_hi ** 3.0
+  #S_hi = np.load('conv_time_array_0.npy')
+  #fS_hi = 1.0 * np.load('conv_test_array_0.npy')
+  # S_hi = np.load('../tbnn/tbnn/pdmp/event_test/conv_time_array_9.npy')
+  # fS_hi = np.load('../tbnn/tbnn/pdmp/event_test/conv_test_array_9.npy')
+  S_hi = np.load('../tbnn/tbnn/pdmp/log_test/time_array_0.npy')
+  fS_hi = np.load('../tbnn/tbnn/pdmp/log_test/test_array_0.npy')
+  epsilon = 0.000001
+  fS_hi_orig = np.copy(fS_hi)
+  fS_hi[fS_hi < epsilon] = epsilon
   print(S_hi.shape)
   sample = np.sort(random.sample(list(np.arange(0, S_hi.size)), 10))
   sample = np.hstack([[0], sample])
@@ -36,6 +49,7 @@ if __name__ == '__main__':
   print(sample)
   S = S_hi[sample]
   fS = fS_hi[sample]
+  fS_orig = fS_hi_orig[sample]
   print(S)
   print(fS)
   lower_hull, upper_hull = compute_hulls(S, fS, domain=[0.0, 1.0])
@@ -59,6 +73,32 @@ if __name__ == '__main__':
   #             np.array([upper_hull[-1].right * upper_hull[-1].m + upper_hull[-1].b]),
   #             c='r', alpha=0.5)
 
+
+
+  sbps = SBPSampler()
+  G = tf.TensorArray(tf.float32, size=0, dynamic_size=True, clear_after_read=False)
+  X = tf.TensorArray(tf.float32, size=0, dynamic_size=True, clear_after_read=False)
+  for i in range(0, S_hi.size):
+    X.write(i, np.array([S_hi[i], 1.0]))
+    G.write(i, fS_hi_orig[i])
+  print('G = {}'.format(G.stack()))
+  print('G = {}'.format(G.stack()))
+  x_time = tf.reshape(X.stack(), [-1, 2])
+  G_vector = tf.reshape(G.stack(), shape=[-1, 1])
+  beta = tf.linalg.inv(tf.transpose(x_time) @ x_time + 0.00001 * tf.eye(2)) @ tf.transpose(x_time) @ G_vector
+  #beta = tf.transpose(x_time) @ G_vector
+  beta_mean, beta_cov = sbps.sbps_beta_posterior([], [], G, X, beta, S.size)
+  print(beta_mean)
+  print(beta_cov)
+  #sbps_bound = tf.maximum(0.0, tf.reshape(X.stack() @ tf.reshape(beta_mean, [2, 1]), -1))
+  sbps_bound = tf.reshape(X.stack() @ tf.reshape(beta_mean, [2, 1]), -1).numpy()
+  sbps_bound[sbps_bound < 0.0] = 0.0
+  sbps_linear = tf.reshape(X.stack() @ tf.reshape(beta, [2, 1]), -1).numpy()
+
+  print('sbps_bound = {}'.format(sbps_bound))
+  #sbps_bound[sbps_bound < 0.0] = 0.0
+  plt.plot(S_hi, sbps_bound, label='sbps')
+  #plt.plot(S_hi, sbps_linear, label='sbps_linear')
   plt.legend(loc=0)
   plt.savefig('arspy_test.png')
   plt.savefig('arspy_test.pdf')
@@ -71,15 +111,18 @@ if __name__ == '__main__':
   plt.plot(time, integrated, label='integrated')
   plt.legend()
   plt.savefig('inverse_test.png')
+  plt.savefig('inverse_test.png')
 
   inv_time, inverse = hull.eval_inverse_integrated(time=integrated)
   #time, integrated = hull.eval_integrated(time=inv_time)
   plt.figure()
-  plt.plot(inv_time, inverse, label='inverse')
+  plt.plot(inv_time, inverse, label='inverse $H^{-1}(t)')
   plt.plot(time, integrated, label='integrated')
   plt.legend()
   plt.savefig('inverse_test.png')
 
+
+  plt.savefig('sbps.png')
   # hull_sample = []
   # time = np.linspace(hull.hull_list[0].inverse_int_domain_lower,
   #                    hull.hull_list[-1].inverse_int_domain_upper, 100)

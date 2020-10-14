@@ -15,8 +15,8 @@ __all__ = (
 )
 
 def sample_poisson_thinning(hull_samples, time):
-  print('hull_samples = {}'.format(hull_samples))
-  print('time = {}'.format(np.sort(time)))
+  #print('hull_samples = {}'.format(hull_samples))
+  #print('time = {}'.format(np.sort(time)))
   S = np.sort(np.array(time).ravel())
   fS = np.array(hull_samples).ravel()
   upper_hulls, _ = compute_hulls(S, fS, domain=[0.0, 10.0])
@@ -159,7 +159,7 @@ class Hull(object):
     #   # print('constant = {}'.format(hull.constant))
     inverse = []
     for t in time:
-      print('t = {}, num_samples = {}'.format(t, len(inverse)))
+      #print('t = {}, num_samples = {}'.format(t, len(inverse)))
       less_than_upper = [t <= x.inverse_integrated_domain_upper for x in self.hull_list]
       #print(less_than_upper)
       #print(np.where(less_than_upper)[0])
